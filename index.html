@@ -30,6 +30,61 @@
       preload="none"
     ></audio>
 
+    <div id="music-box">
+      <button id="music-play" type="button" title="Phát / Tạm dừng">⏸</button>
+      <select id="music-select" title="Chọn bài"></select>
+      <input
+        type="range"
+        id="music-vol"
+        min="0"
+        max="1"
+        step="0.05"
+        value="1"
+        title="Âm lượng"
+      />
+    </div>
+
+    <style>
+      #music-box {
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        max-width: calc(100vw - 32px);
+        padding: 8px 12px;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 179, 212, 0.5);
+        border-radius: 999px;
+        backdrop-filter: blur(6px);
+      }
+      #music-play {
+        background: transparent;
+        border: none;
+        color: #ffb3d4;
+        font-size: 16px;
+        cursor: pointer;
+      }
+      #music-select {
+        background: transparent;
+        color: #ffb3d4;
+        border: none;
+        outline: none;
+        font-size: 14px;
+        font-family: inherit;
+        max-width: 150px;
+      }
+      #music-select option {
+        color: #000;
+      }
+      #music-vol {
+        width: 70px;
+        accent-color: #ff6fae;
+      }
+    </style>
+
     <div id="stage">
       <div class="line l1" id="l1"></div>
       <div class="line l2" id="l2"></div>
@@ -176,7 +231,7 @@
       const R = (a, b) => Math.random() * (b - a) + a;
       const $ = (id) => document.getElementById(id);
       const backgroundMusic = $('background-music');
-      backgroundMusic.volume = 0.65;
+      backgroundMusic.volume = 1;
 
       function startBackgroundMusic() {
         if (backgroundMusic.paused) {
@@ -187,6 +242,48 @@
       startBackgroundMusic();
       document.addEventListener('pointerdown', startBackgroundMusic, {
         once: true,
+      });
+
+      // === CHỌN NHẠC (danh sách bài bạn tự bỏ vào thư mục) ===
+      const SONGS = [
+        {
+          name: 'Cưới đi',
+          src: './snaptik.vn_7665572654916635920.mp3',
+        },
+        { name: 'Chờ anh chút', src: './choanhchut.mp3' },
+        { name: 'Anh yêu em', src: './snaptik.vn_7624866307267120404.mp3' },
+      ];
+
+      const musicSelect = $('music-select');
+      const musicPlay = $('music-play');
+
+      SONGS.forEach((s, i) => {
+        const o = document.createElement('option');
+        o.value = i;
+        o.textContent = s.name;
+        musicSelect.appendChild(o);
+      });
+
+      musicSelect.addEventListener('change', () => {
+        backgroundMusic.src = SONGS[musicSelect.value].src;
+        backgroundMusic.play().catch(() => {});
+      });
+
+      musicPlay.addEventListener('click', () => {
+        if (backgroundMusic.paused) backgroundMusic.play().catch(() => {});
+        else backgroundMusic.pause();
+      });
+      backgroundMusic.addEventListener(
+        'play',
+        () => (musicPlay.textContent = '⏸')
+      );
+      backgroundMusic.addEventListener(
+        'pause',
+        () => (musicPlay.textContent = '▶')
+      );
+
+      $('music-vol').addEventListener('input', (e) => {
+        backgroundMusic.volume = e.target.value;
       });
 
       for (let i = 0; i < 60; i++) {
@@ -489,8 +586,9 @@
 
         const particles = [];
         const fireworks = [];
+        const heartSplits = [];
 
-        // 2. Hàm toán học tính toạ độ để xếp các hạt sáng thành hình trái tim
+        // 2. Hàm toán học tính toạ độ hình trái tim
         function getHeartPoint(t, scale) {
           const x = 16 * Math.pow(Math.sin(t), 3);
           const y = -(
@@ -502,7 +600,28 @@
           return { x: x * scale, y: y * scale };
         }
 
-        // 3. Lớp tạo Hạt sáng (Particles) sau khi nổ
+        // Tập điểm của 1 trái tim (viền + vòng trong cho đầy đặn), dùng chung cho mọi trái tim
+        const HEART_POINTS = [];
+        (function buildHeartPoints() {
+          const rings = [
+            { k: 1, n: 70 },
+            { k: 0.62, n: 40 },
+            { k: 0.28, n: 18 },
+          ];
+          rings.forEach((r) => {
+            for (let i = 0; i < r.n; i++) {
+              const t = (i / r.n) * Math.PI * 2;
+              const p = getHeartPoint(t, r.k);
+              HEART_POINTS.push({
+                x: p.x,
+                y: p.y,
+                size: Math.random() * 1.2 + 1,
+              });
+            }
+          });
+        })();
+
+        // 3. Hạt sáng nổ ra thành hình trái tim (kiểu cũ)
         class HeartParticle {
           constructor(x, y, color, t, scale) {
             this.x = x;
@@ -510,9 +629,7 @@
             this.color = color;
             this.size = Math.random() * 2 + 1;
             this.life = 1;
-            this.decay = Math.random() * 0.015 + 0.015; // Tốc độ mờ dần
-
-            // Đích đến để tạo thành hình trái tim
+            this.decay = Math.random() * 0.015 + 0.015;
             const target = getHeartPoint(t, scale);
             this.tx = target.x;
             this.ty = target.y;
@@ -521,12 +638,11 @@
           }
           update() {
             this.life -= this.decay;
-            // Hiệu ứng bung ra vị trí đích
             this.vx += (this.tx - this.vx) * 0.08;
             this.vy += (this.ty - this.vy) * 0.08;
             this.x += this.vx;
             this.y += this.vy;
-            this.y += 0.5; // Lực hấp dẫn rơi xuống nhẹ
+            this.y += 0.5;
           }
           draw() {
             ctx.globalAlpha = Math.max(0, this.life);
@@ -537,12 +653,83 @@
           }
         }
 
+        // 3b. Kiểu mới: 1 trái tim lớn -> tách thành 3 trái tim nhỏ rơi từ từ
+        class HeartSplit {
+          constructor(x, y, color) {
+            this.color = color;
+            this.phase = 'form'; // 'form' -> 'split'
+            this.timer = 0;
+            this.bigScale = Math.random() * 0.8 + 2.6;
+            this.smallScale = this.bigScale * 0.45;
+            this.dead = false;
+            this.hearts = [
+              { cx: x, cy: y, s: 0, vx: 0, vy: 0, life: 1, phase: 0 },
+            ];
+          }
+          update() {
+            this.timer++;
+            if (this.phase === 'form') {
+              const h = this.hearts[0];
+              const p = Math.min(1, this.timer / 30);
+              h.s = this.bigScale * (1 - Math.pow(1 - p, 3));
+              if (this.timer > 65) {
+                const vxs = [-2.2, 0, 2.2];
+                const vys = [-0.2, -0.9, -0.2];
+                const splitColors = ['#ff2a4d', '#ff8fc0', '#ffffff']; // đỏ, hồng, trắng
+                this.hearts = vxs.map((vx, i) => ({
+                  cx: h.cx,
+                  cy: h.cy,
+                  s: this.bigScale,
+                  vx: vx,
+                  vy: vys[i],
+                  life: 1,
+                  phase: Math.random() * Math.PI * 2,
+                  color: splitColors[i],
+                }));
+                this.phase = 'split';
+                this.timer = 0;
+              }
+            } else {
+              let alive = 0;
+              this.hearts.forEach((h) => {
+                h.s += (this.smallScale - h.s) * 0.1;
+                h.vx *= 0.97;
+                h.vy += (1.0 - h.vy) * 0.03; // rơi dần tới tốc độ ~1.0
+                h.phase += 0.05;
+                h.cx += h.vx + Math.sin(h.phase) * 0.35;
+                h.cy += h.vy;
+                if (h.cy - 20 * h.s > ch) h.life = 0; // rơi khỏi đáy màn hình thì biến mất
+                if (h.life > 0) alive++;
+              });
+              if (alive === 0) this.dead = true;
+            }
+          }
+          draw() {
+            this.hearts.forEach((h) => {
+              if (h.life <= 0 || h.s <= 0) return;
+              ctx.fillStyle = h.color || this.color;
+              for (let i = 0; i < HEART_POINTS.length; i++) {
+                const p = HEART_POINTS[i];
+                ctx.globalAlpha = 0.7 + Math.random() * 0.3;
+                ctx.beginPath();
+                ctx.arc(
+                  h.cx + p.x * h.s,
+                  h.cy + p.y * h.s,
+                  p.size,
+                  0,
+                  Math.PI * 2
+                );
+                ctx.fill();
+              }
+            });
+          }
+        }
         // 4. Lớp Pháo hoa bay lên
         class Firework {
           constructor() {
             this.x = Math.random() * cw;
             this.y = ch;
-            this.targetY = Math.random() * (ch / 2) + ch / 6; // Độ cao nổ
+            this.targetY = Math.random() * (ch / 2) + ch / 6;
             this.speed = Math.random() * 3 + 5;
             this.color = rnd([
               '#ffb3d4',
@@ -550,12 +737,11 @@
               '#ffd9a8',
               '#ffffff',
               '#ff3d84',
-            ]); // Màu tone hồng/vàng
+            ]);
             this.dead = false;
           }
           update() {
             this.y -= this.speed;
-            // Vẽ vệt đuôi pháo bay lên
             ctx.globalAlpha = 1;
             ctx.fillStyle = this.color;
             ctx.beginPath();
@@ -568,33 +754,35 @@
             }
           }
           explode() {
-            const numParticles = 60; // Mật độ hạt của 1 trái tim
-            const scale = Math.random() * 0.5 + 0.5; // Độ to nhỏ ngẫu nhiên
-            for (let i = 0; i < numParticles; i++) {
-              const t = (i / numParticles) * Math.PI * 2;
-              particles.push(
-                new HeartParticle(this.x, this.y, this.color, t, scale)
-              );
+            // 50%: nổ trái tim như cũ | 50%: 1 trái tim -> 3 trái tim nhỏ rơi xuống
+            if (Math.random() < 0.7) {
+              const numParticles = 60;
+              const scale = Math.random() * 0.5 + 0.5;
+              for (let i = 0; i < numParticles; i++) {
+                const t = (i / numParticles) * Math.PI * 2;
+                particles.push(
+                  new HeartParticle(this.x, this.y, this.color, t, scale)
+                );
+              }
+            } else {
+              heartSplits.push(new HeartSplit(this.x, this.y, this.color));
             }
           }
         }
 
         // 5. Vòng lặp Animation
         let allowFiring = false;
-        // Bắt đầu bắn pháo hoa khi người dùng click giải mã
         document.getElementById('btn').addEventListener('click', () => {
           allowFiring = true;
         });
 
         function loop() {
           requestAnimationFrame(loop);
-          // Tạo hiệu ứng vệt mờ sáng lấp lánh
           ctx.globalCompositeOperation = 'destination-out';
           ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
           ctx.fillRect(0, 0, cw, ch);
           ctx.globalCompositeOperation = 'lighter';
 
-          // Xác suất bắn pháo hoa tự động
           if (allowFiring && Math.random() < 0.05) {
             fireworks.push(new Firework());
           }
@@ -608,6 +796,12 @@
             particles[i].update();
             particles[i].draw();
             if (particles[i].life <= 0) particles.splice(i, 1);
+          }
+
+          for (let i = heartSplits.length - 1; i >= 0; i--) {
+            heartSplits[i].update();
+            heartSplits[i].draw();
+            if (heartSplits[i].dead) heartSplits.splice(i, 1);
           }
         }
         loop();
